@@ -14,7 +14,10 @@ class FriendCode(DatabaseCog):
 
     # based on https://github.com/megumisonoda/SaberBot/blob/master/lib/saberbot/valid_fc.rb
     def verify_fc(self, fc):
-        fc = int(fc.replace('-', ''))
+        try:
+            fc = int(fc.replace('-', ''))
+        except ValueError:
+            return None
         if fc > 0x7FFFFFFFFF:
             return None
         principal_id = fc & 0xFFFFFFFF
@@ -40,6 +43,7 @@ class FriendCode(DatabaseCog):
         await self.add_friendcode(ctx.author.id, fc)
         await ctx.send(f"{ctx.author.mention} Friend code inserted: {self.fc_to_string(fc)}")
 
+    @commands.guild_only()
     @commands.command()
     async def fcquery(self, ctx, member: SafeMember):
         """Get other user's friend code. You must have one yourself in the database."""
@@ -50,7 +54,7 @@ class FriendCode(DatabaseCog):
             for row_m in rows_m:
                 await ctx.send(f"{member.mention} friend code is {self.fc_to_string(row_m[1])}")
                 try:
-                    member.send(f"{self.bot.help_command.remove_mentions(ctx.author)} has asked for your friend code! Their code is {self.fc_to_string(row[1])}.")
+                    await member.send(f"{ctx.author} has asked for your friend code! Their code is {self.fc_to_string(row[1])}.")
                 except discord.errors.Forbidden:
                     pass  # don't fail in case user has DMs disabled for this server, or blocked the bot
                 return
@@ -61,10 +65,8 @@ class FriendCode(DatabaseCog):
     @commands.command()
     async def fcdelete(self, ctx):
         """Delete your friend code."""
-        c = self.bot.dbcon.cursor()
         await self.delete_friendcode(ctx.author.id)
         await ctx.send("Friend code removed from database.")
-        self.bot.dbcon.commit()
 
     @commands.command()
     async def fctest(self, ctx, fc):

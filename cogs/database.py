@@ -91,7 +91,7 @@ class DatabaseCog(commands.Cog):
 
     async def add_helper(self, user_id, console):
         async with self.bot.holder as cur:
-            if await self.get_console(user_id):
+            if await self.get_console(user_id) is None:
                 await cur.execute('INSERT INTO helpers VALUES(?, ?)', (user_id, console))
             else:
                 await cur.execute('UPDATE helpers SET console=? WHERE user_id=?', (console, user_id))
@@ -104,17 +104,13 @@ class DatabaseCog(commands.Cog):
         async with self.bot.holder as cur:
             await cur.execute('SELECT console FROM helpers WHERE user_id=?', (user_id,))
             row = await cur.fetchone()
-            if row:
-                return row[0]
-            return None
+            return row[0] if row is not None else row
 
     async def get_stafftrole(self, user_id):
         async with self.bot.holder as cur:
             await cur.execute('SELECT position FROM staff WHERE user_id=?', (user_id,))
             rank = await cur.fetchone()
-            if rank:
-                return rank[0]
-            return None
+            return rank[0] if rank is not None else rank
 
     async def add_warn(self, user_id, issuer_id, reason):
         async with self.bot.holder as cur:
@@ -139,13 +135,18 @@ class DatabaseCog(commands.Cog):
         async with self.bot.holder as cur:
             await cur.execute('SELECT 1 FROM timed_restrictions WHERE user_id=? AND type=?', (user_id, type))
             if await cur.fetchone() is not None:
-                await cur.execute('UPDATE timed_restrictions SET timestamp=?, alert=0 WHERE user_id=? AND type=?', (user_id, type))
+                await cur.execute('UPDATE timed_restrictions SET timestamp=?, alert=0 WHERE user_id=? AND type=?', (end_date, user_id, type))
             else:
                 await cur.execute('INSERT INTO timed_restrictions VALUES(?, ?, ?, ?)', (user_id, end_date, type, 0))
 
     async def remove_timed_restriction(self, user_id, type):
         async with self.bot.holder as cur:
             await cur.execute('DELETE FROM timed_restrictions WHERE user_id=? AND type=?', (user_id, type))
+
+    async def get_time_restrictions_by_user_type(self, userid, type):
+        async with self.bot.holder as cur:
+            await cur.execute('SELECT * from timed_restrictions WHERE user_id=? AND type=?', (userid,type))
+            return await cur.fetchone()
 
     async def get_time_restrictions_by_type(self, type):
         async with self.bot.holder as cur:
@@ -161,21 +162,19 @@ class DatabaseCog(commands.Cog):
             timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
         async with self.bot.holder as cur:
             await cur.execute('INSERT INTO softbans VALUES(?, ? , ?, ?)', (user_id, issuer_id, reason, timestamp))
-            return True
 
     async def remove_softban(self, user_id):
         async with self.bot.holder as cur:
             await cur.execute('DELETE FROM softbans WHERE user_id = ?', (user_id,))
 
-    async def get_softbans(self, user_id):
+    async def get_softban(self, user_id):
         async with self.bot.holder as cur:
             await cur.execute('SELECT * FROM softbans WHERE user_id=?', (user_id,))
-            return await cur.fetchall()
+            return await cur.fetchone()
 
     async def add_watch(self, user_id):
         async with self.bot.holder as cur:
             await cur.execute('INSERT INTO watchlist VALUES(?)', (user_id,))
-            return True
 
     async def remove_watch(self, user_id):
         async with self.bot.holder as cur:

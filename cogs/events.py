@@ -16,6 +16,10 @@ class Events(DatabaseCog):
     Special event handling.
     """
 
+    def __init__(self, bot):
+        super().__init__(bot)
+        self.bot.temp_guilds = {}
+
     # don't add spaces or dashes to words
     piracy_tools = (
         'freeshop',
@@ -123,7 +127,8 @@ class Events(DatabaseCog):
         'stargate',
         'freestore',
         'sxinstaller',
-        'sxos',
+
+        #'sxos',
     )
 
     # use the full ID, including capitalization and dashes
@@ -138,6 +143,9 @@ class Events(DatabaseCog):
         'notabug',
         #'sx',
         #'tx',
+        'sxos',
+        'operationidroid',
+        'hbg',
     )
 
     drama_alert = ()
@@ -156,6 +164,7 @@ class Events(DatabaseCog):
     # unbanning stuff
     unbanning_stuff = (
         'unbanmii',
+        'easymode9',
     )
 
     # piracy sites
@@ -180,15 +189,36 @@ class Events(DatabaseCog):
         'romulation',
         'emulator.games',
         '3dscia',
+        'darksoftware',
+        'ziperto',
+        'cdromance',
+        'emurom',
+        'r/3dspiracy',
+        'r/wiiupiracy',
+        'pokemoner',
+        'ndspassion',
+        'inmortalgamespro',
+        'romsmode',
+        'arcadepunks',
+        'romstorage',
+        'enikon',
+        'vimm',
+        'r/roms',
+        'xecuterrocks',
+    )
+
+    approved_guilds = (
+        'C29hYvh',  # Nintendo Homebrew
+        'ZdqEhed',  # Reswitched
+        'qgEeK3E',  # Famicomunnity
+        'yqSut8c',  # TWL Mode Hacking!
+        'EZSxqRr',  # ACNL Modding
     )
 
     # I hate naming variables sometimes
     user_antispam = {}
     channel_antispam = {}
     help_notice_anti_repeat = []
-
-    # this is not a good idea, but i'll make a better implementation later
-    channels_to_watch_for_videos = ['196635695958196224', '247557068490276864', '279783073497874442', '439933093118476289']
 
     async def scan_message(self, message, is_edit=False):
         embed = discord.Embed()
@@ -209,7 +239,7 @@ class Events(DatabaseCog):
             if is_edit:
                 msg += " (edited)"
             await self.bot.channels['watch-logs'].send(msg, embed=embed)
-        is_help_channel = "assistance" in message.channel.name
+        is_help_channel = message.channel in self.bot.assistance_channels
         msg = ''.join(char for char in message.content.lower() if char in printable)
         msg_no_separators = re.sub('[ \*_\-~]', '', msg)
 
@@ -219,10 +249,13 @@ class Events(DatabaseCog):
         contains_piracy_tool_mention = any(x in msg_no_separators for x in self.piracy_tools)
 
         # modified regular expresion made by deme72
-        exp = re.compile('(?:https?://)?(?:(?:(?:www\.)?youtube\.com(?:/(?:watch\?.*?v=([^&\s]+)(?:[^\s]))))|(?:youtu\.be/([^\s]+)))')
-        res = exp.findall(message.content)
+        res = re.findall('(?:https?://)?(?:(?:(?:www\.)?youtube\.com(?:/(?:watch\?.*?v=([^&\s]+)(?:[^\s]))))|(?:youtu\.be/([^\s]+)))', message.content)
         contains_video = any(res)
         contains_piracy_video_id = False if not contains_video else any(x or y for x, y in res if x in self.piracy_video_ids or y in self.piracy_video_ids)
+
+        res = re.findall('(?:discordapp\.com/invite|discord\.gg)/([\w]+)', message.content)
+        temp_guilds = [x for x in res if x in self.bot.temp_guilds]
+        contains_non_approved_invite = not all(x in self.approved_guilds or x in self.bot.temp_guilds for x in res)
 
         contains_piracy_tool_alert_mention = any(x in msg_no_separators for x in self.piracy_tools_alert)
         contains_piracy_site_mention_indirect = any(x in msg for x in ('iso site', 'chaos site',))
@@ -234,10 +267,29 @@ class Events(DatabaseCog):
 
         for f in message.attachments:
             if not f.filename.lower().endswith(self.ignored_file_extensions):
-                embed2 = discord.Embed(description=f"Size: {f.size}\nMessage: [{message.channel.name}]({message.jump_url})\nDownload: [{self.bot.help_command.remove_mentions(f.filename)}]({f.url})")
-                await self.bot.channels['uploadlogs'].send(f"📎 **Attachment**: {message.author.mention} uploaded to {message.channel.mention}", embed=embed2)
+                embed2 = discord.Embed(description=f"Size: {f.size}\nMessage: [{message.channel.name}]({message.jump_url})\nDownload: [{f.filename}]({f.url})")
+                await self.bot.channels['upload-logs'].send(f"📎 **Attachment**: {message.author.mention} uploaded to {message.channel.mention}", embed=embed2)
         if contains_invite_link:
-            await self.bot.channels['message-logs'].send(f"✉️ **Invite posted**: {message.author.mention} posted an invite link in {message.channel.mention}\n------------------\n{self.bot.help_command.remove_mentions(message.content)}")
+            await self.bot.channels['message-logs'].send(f"✉️ **Invite posted**: {message.author.mention} posted an invite link in {message.channel.mention} {'(message deleted)' if contains_non_approved_invite else ''}\n------------------\n{self.bot.escape_text(message.content)}")
+            if contains_non_approved_invite:
+                try:
+                    await message.delete()
+                except discord.NotFound:
+                    pass
+
+                try:
+                    await message.author.send(f"Please read {self.bot.channels['welcome-and-rules'].mention}. Server invites must be approved by staff. To contact staff send a message to <@333857992170536961>.")
+                except discord.errors.Forbidden:
+                    pass
+            if temp_guilds:
+                for guild in temp_guilds:
+                    try:
+                        self.bot.temp_guilds[guild] -= 1
+                    except KeyError:
+                        continue
+                    if self.bot.temp_guilds[guild] <= 0:
+                        del self.bot.temp_guilds[guild]
+
         if contains_misinformation_url_mention:
             try:
                 await message.delete()
@@ -247,7 +299,7 @@ class Events(DatabaseCog):
                 await message.author.send(f"Please read {self.bot.channels['welcome-and-rules'].mention}. This site may be misinterpreted as legitimate and cause users harm, therefore your message was automatically deleted.", embed=embed)
             except discord.errors.Forbidden:
                 pass  # don't fail in case user has DMs disabled for this server, or blocked the bot
-            await self.bot.send_message(self.bot.channels['message-logs'], f"**Bad site**: {message.author.mention} mentioned a blocked site in {message.channel.mention} (message deleted)", embed=embed)
+            await self.bot.channels['message-logs'].send(f"**Bad site**: {message.author.mention} mentioned a blocked site in {message.channel.mention} (message deleted)", embed=embed)
         if contains_drama_alert:
             await self.bot.channels['message-logs'].send(f"**Potential drama/heated debate Warning**: {message.author.mention} posted a blacklisted word in {message.channel.mention}", embed=embed)
         if contains_piracy_tool_mention:
@@ -303,8 +355,8 @@ class Events(DatabaseCog):
             except discord.errors.Forbidden:
                 pass  # don't fail in case user has DMs disabled for this server, or blocked the bot
             await self.bot.channels['message-logs'].send(f"**Bad site**: {message.author.mention} mentioned an unbanning site/service/program directly in {message.channel.mention} (message deleted)", embed=embed)
-        if contains_video and message.channel.id in self.channels_to_watch_for_videos:
-            await self.bot.channels['message-logs'].send(f"▶️ **Video posted**: {message.author.mention} posted a video in {message.channel.mention}\n------------------\n{message.content.clear_content}")
+        if contains_video and message.channel in self.bot.assistance_channels:
+            await self.bot.channels['message-logs'].send(f"▶️ **Video posted**: {message.author.mention} posted a video in {message.channel.mention}\n------------------\n{message.clean_content}")
 
         # check for guide mirrors and post the actual link
         urls = re.findall(r'(https?://\S+)', msg)
@@ -346,7 +398,7 @@ class Events(DatabaseCog):
                 await message.author.send(f"You were automatically placed under probation in {self.bot.guild.name} for mass user mentions.")
             except discord.errors.Forbidden:
                 pass
-            await self.add_restriction(message.author, self.bot.roles['Probation'])
+            await self.add_restriction(message.author.id, self.bot.roles['Probation'])
             await message.author.add_roles(self.bot.roles['Probation'])
 
     async def user_spam_check(self, message):
@@ -370,7 +422,7 @@ class Events(DatabaseCog):
             await self.bot.channels['mods'].send(log_msg + f"\nSee {self.bot.channels['mod-logs'].mention} for a list of deleted messages.")
             for msg in msgs_to_delete:
                 try:
-                    await self.bot.delete_message(msg)
+                    await msg.delete()
                 except discord.errors.NotFound:
                     pass  # don't fail if the message doesn't exist
         await asyncio.sleep(3)
@@ -453,11 +505,12 @@ class Events(DatabaseCog):
             if message.embeds[0].title.startswith('[Kurisu:port]'):
                 await self.bot.channels['helpers'].send("Automatically pulling changes!")
                 call(['git', 'pull'])
+                await self.bot.channels['helpers'].send("Restarting bot...")
                 await self.bot.close()
             return
+        await self.bot.wait_until_all_ready()
         if message.author == message.guild.me or await check_staff_id(self, 'Helper', message.author.id) or await self.check_nofilter(message.channel):  # don't process messages by the bot or staff or in the helpers channel
             return
-        await self.bot.wait_until_all_ready()
         await self.scan_message(message)
         self.bot.loop.create_task(self.user_ping_check(message))
         self.bot.loop.create_task(self.user_spam_check(message))
@@ -467,11 +520,11 @@ class Events(DatabaseCog):
     async def on_message_edit(self, message_before, message_after):
         if isinstance(message_before.channel, discord.abc.PrivateChannel):
             return
+        await self.bot.wait_until_all_ready()
         try:
             if await self.check_nofilter(message_before.channel):
                 return
-            await self.bot.wait_until_all_ready()
-            if message_after.author == self.bot.guild.me or self.bot.roles['Staff'] in message_after.author.roles or await self.check_nofilter(message_after.channel):  # don't process messages by the bot or staff or in the helpers channel
+            if message_after.author == self.bot.guild.me or await check_staff_id(self, 'Helper', message_after.author.id) or await self.check_nofilter(message_after.channel):  # don't process messages by the bot or staff or in the helpers channel
                 return
             if message_before.content == message_after.content:
                 return

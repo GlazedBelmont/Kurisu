@@ -10,9 +10,11 @@ from subprocess import check_output, CalledProcessError
 import os
 from cogs.database import ConnectionHolder
 from sys import exit, hexversion
-from traceback import format_exception, print_exc
+from traceback import format_exception, format_exc
 import discord
 from discord.ext import commands
+from datetime import datetime
+from cogs.checks import check_staff_id
 
 # sets working directory to bot's folder
 dir_path = os.path.dirname(os.path.realpath(__file__))
@@ -46,6 +48,8 @@ cogs = [
     'cogs.mod',
     'cogs.nxerr',
     'cogs.rules',
+    'cogs.ssnc',
+    'cogs.xkcdparse',
 ]
 
 
@@ -53,6 +57,8 @@ class Kurisu(commands.Bot):
     """Its him!!."""
     def __init__(self, command_prefix, description):
         super().__init__(command_prefix=command_prefix, description=description)
+
+        self.startup = datetime.now()
 
         self.roles = {
             'Helpers': None,
@@ -64,7 +70,11 @@ class Kurisu(commands.Bot):
             'On-Duty 3DS': None,
             'On-Duty Wii U': None,
             'On-Duty Switch': None,
+            'On-Duty Legacy': None,
             'Probation': None,
+            'Retired Staff': None,
+            'Verified': None,
+            'Trusted' : None,
             'Muted': None,
             'No-Help': None,
             'no-elsewhere': None,
@@ -74,7 +84,6 @@ class Kurisu(commands.Bot):
             'No-Embed': None,
             '#elsewhere': None,
             'Small Help': None,
-
         }
 
         self.actions = []
@@ -83,16 +92,27 @@ class Kurisu(commands.Bot):
         self.channels = {
             'announcements': None,
             'welcome-and-rules': None,
-            'mods': None,
+            '3ds-assistance-1': None,
+            '3ds-assistance-2': None,
+            'wiiu-assistance': None,
+            'switch-assistance': None,
             'helpers': None,
-            'message-logs': None,
-            'mod-logs': None,
             'watch-logs': None,
+            'message-logs': None,
             'upload-logs': None,
-            'mod-mail': None,
-            'bot-err': None,
-            'server-logs': None,
+            'hacking-general': None,
             'meta': None,
+            'legacy-systems': None,
+            'dev': None,
+            'off-topic': None,
+            'voice-and-music': None,
+            'bot-cmds': None,
+            'mods': None,
+            'mod-mail': None,
+            'mod-logs': None,
+            'server-logs': None,
+            'bot-err': None,
+
         }
 
         self.failed_cogs = []
@@ -107,8 +127,13 @@ class Kurisu(commands.Bot):
             try:
                 self.load_extension(extension)
             except BaseException as e:
-                print(f'{extension} failed to load.', extension)
+                print(f'{extension} failed to load.')
                 self.failed_cogs.append([extension, type(e).__name__, e])
+
+    @staticmethod
+    def escape_text(text):
+        text = str(text)
+        return discord.utils.escape_markdown(discord.utils.escape_mentions(text))
 
     async def on_ready(self):
         guilds = self.guilds
@@ -125,14 +150,27 @@ class Kurisu(commands.Bot):
             if not self.roles[n]:
                 print(f'Failed to find role {n}')
 
+        self.assistance_channels = {
+            self.channels['3ds-assistance-1'],
+            self.channels['3ds-assistance-2'],
+            self.channels['wiiu-assistance'],
+            self.channels['switch-assistance'],
+            self.channels['hacking-general'],
+            self.channels['legacy-systems'],
+        }
+
         self.staff_roles = {'Owner': self.roles['Owner'],
                             'SuperOP': self.roles['SuperOP'],
                             'OP': self.roles['OP'],
-                            'HalfOP': self.roles['HalfOP']}
+                            'HalfOP': self.roles['HalfOP'],
+                            'Staff' : self.roles['Staff'],
+                            }
 
         self.helper_roles = {"3DS": self.roles['On-Duty 3DS'],
                              "WiiU": self.roles['On-Duty Wii U'],
-                             "Switch": self.roles['On-Duty Switch']}
+                             "Switch": self.roles['On-Duty Switch'],
+                             "Legacy": self.roles['On-Duty Legacy']
+                             }
 
         self.holder = ConnectionHolder()
         await self.holder.load_db(database_name, self.loop)
@@ -149,6 +187,7 @@ class Kurisu(commands.Bot):
     async def on_command_error(self, ctx: commands.Context, exc: commands.CommandInvokeError):
         author: discord.Member = ctx.author
         command: commands.Command = ctx.command or '<unknown cmd>'
+        exc = getattr(exc, 'original', exc)
 
         if isinstance(exc, commands.CommandNotFound):
             return
@@ -165,15 +204,27 @@ class Kurisu(commands.Bot):
         elif isinstance(exc, commands.BadArgument):
             await ctx.send(f'{author.mention} A bad argument was given: `{exc}`\n')
             await ctx.send_help(ctx.command)
+
         elif isinstance(exc, discord.ext.commands.errors.CommandOnCooldown):
-            try:
-                await ctx.message.delete()
-            except discord.errors.NotFound:
-                pass
-            await ctx.send(f"{ctx.message.author.mention} This command was used {exc.cooldown.per - exc.retry_after:.2f}s ago and is on cooldown. Try again in {exc.retry_after:.2f}s.", delete_after=10)
+            if not await check_staff_id(ctx, 'Helper', author.id):
+                try:
+                    await ctx.message.delete()
+                except (discord.errors.NotFound, discord.errors.Forbidden):
+                    pass
+                await ctx.send(f"{ctx.message.author.mention} This command was used {exc.cooldown.per - exc.retry_after:.2f}s ago and is on cooldown. Try again in {exc.retry_after:.2f}s.", delete_after=10)
+            else:
+                await ctx.reinvoke()
+
         elif isinstance(exc, commands.MissingRequiredArgument):
-            await ctx.send(f'{author.mention} You are missing required arguments.\n')
+            await ctx.send(f'{author.mention} You are missing required argument {exc.param.name}.\n')
             await ctx.send_help(ctx.command)
+
+        elif isinstance(exc, discord.NotFound):
+            await ctx.send(f"ID not found.")
+
+        elif isinstance(exc, discord.Forbidden):
+            await ctx.send(f"💢 I can't help you if you don't let me!\n`{exc.text}`.")
+
         elif isinstance(exc, commands.CommandInvokeError):
             await ctx.send(f'{author.mention} `{command}` raised an exception during usage')
             msg = "".join(format_exception(type(exc), exc, exc.__traceback__))
@@ -188,8 +239,10 @@ class Kurisu(commands.Bot):
                 await self.channels['bot-err'].send(f'```\n{chunk}\n```')
 
     async def on_error(self, event_method, *args, **kwargs):
-        print(f'Exception occurred in {event_method}')
-        print_exc()
+        await self.channels['bot-err'].send(f'Error in {event_method}:')
+        msg = format_exc()
+        for chunk in [msg[i:i + 1800] for i in range(0, len(msg), 1800)]:
+            await self.channels['bot-err'].send(f'```\n{chunk}\n```')
 
     def add_cog(self, cog):
         super().add_cog(cog)
@@ -233,7 +286,7 @@ def main():
         branch = "<unknown>"
 
     bot = Kurisu(('.', '!'), description="Kurisu, the bot for Nintendo Homebrew!")
-    bot.help_command.dm_help = None
+    bot.help_command = commands.DefaultHelpCommand(dm_help = None)
     print(f'Starting Kurisu on commit {commit} on branch {branch}', commit, branch)
     bot.load_cogs()
     bot.run(config['Main']['token'])

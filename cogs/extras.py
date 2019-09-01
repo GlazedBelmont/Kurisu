@@ -30,10 +30,16 @@ class Extras(commands.Cog):
         embed.description = "Kurisu, the Nintendo Homebrew Discord bot!"
         await ctx.send(embed=embed)
 
+    @commands.guild_only()
     @commands.command()
     async def membercount(self, ctx):
         """Prints the member count of the server."""
         await ctx.send(f"{ctx.guild.name} has {ctx.guild.member_count:,} members!")
+
+    @commands.command()
+    async def uptime(self, ctx):
+        """Print total uptime of the bot."""
+        await ctx.send(f"Uptime: {datetime.datetime.now() - self.bot.startup}")
 
     @commands.guild_only()
     @is_staff("SuperOP")
@@ -89,8 +95,8 @@ class Extras(commands.Cog):
             return
 
         msg = await ctx.send(f"I'm figuring this out!")
-        with ctx.channel.typing:
-            count = await ctx.guildestimate_pruned_members(days=days)
+        async with ctx.channel.typing():
+            count = await ctx.guild.estimate_pruned_members(days=days)
             await msg.edit(content=f"{count:,} members inactive for {days} day(s) would be kicked from {ctx.guild.name}!")
 
     @is_staff("HalfOP")
@@ -105,8 +111,8 @@ class Extras(commands.Cog):
             await ctx.send("Minimum 1 day")
             return
         msg = await ctx.send(f"I'm figuring this out!")
-        with ctx.channel.typing:
-            count = await ctx.guildestimate_pruned_members(days=days)
+        async with ctx.channel.typing():
+            count = await ctx.guild.estimate_pruned_members(days=days)
             if days == 1:
                 await msg.edit(content=f"{ctx.guild.member_count - count:,} members were active today in {ctx.guild.name}!")
             else:
@@ -206,7 +212,7 @@ class Extras(commands.Cog):
             else:
                 await author.send(f"{channelname} is not a valid toggleable channel.")
         except discord.errors.Forbidden:
-            await self.bot.say("💢 I don't have permission to do this.")
+            await ctx.send("💢 I don't have permission to do this.")
 
     @commands.guild_only()
     @commands.command()
@@ -226,7 +232,7 @@ class Extras(commands.Cog):
                 except discord.errors.Forbidden:
                     await ctx.send("💢  I can't change your nickname!")
                     return
-                await ctx.send(f"Your nickname is now `{self.bot.help_command.remove_mentions(member.display_name)}`!")
+                await ctx.send(f"Your nickname is now `{member.display_name}`!")
         else:
             await ctx.send("This month is not colorful enough!")
 
@@ -468,7 +474,7 @@ class Extras(commands.Cog):
             await ctx.send("This day is not filled with enough Jameson Irish Whiskey [PAID PROMOTION]!")
 
     @commands.guild_only()
-    @commands.command(pass_context=True)
+    @commands.command()
     async def noshamrock(self, ctx):
         """Tired of it."""
         member = ctx.message.author
