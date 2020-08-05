@@ -274,6 +274,7 @@ class Mod(DatabaseCog):
 
         timestamp = datetime.datetime.now()
         delta = datetime.timedelta(seconds=seconds)
+        delta_string = delta
         unmute_time = timestamp + delta
         unmute_time_string = unmute_time.strftime("%Y-%m-%d %H:%M:%S")
 
@@ -288,7 +289,7 @@ class Mod(DatabaseCog):
         signature = utils.command_signature(ctx.command)
         if not old_timestamp:
             await ctx.send(f"{member.mention} can no longer speak.")
-            msg = f"🔇 **Timed mute**: {issuer.mention} muted {member.mention}| {self.bot.escape_text(member)} until {unmute_time_string} "
+            msg = f"🔇 **Timed mute**: {issuer.mention} muted {member.mention}| {self.bot.escape_text(member)} for {delta}, until {unmute_time_string} "
         else:
             await ctx.send(f"{member.mention} mute was updated.")
             msg = f"🔇 **Timed mute**: {issuer.mention} updated {member.mention}| {self.bot.escape_text(member)} time mute from {old_timestamp} until {unmute_time_string}"
@@ -505,7 +506,7 @@ class Mod(DatabaseCog):
         await ctx.send(f"{member.mention} can no longer speak in Assistance Channels.")
         reason = self.bot.escape_text(reason)
         signature = utils.command_signature(ctx.command)
-        msg = f"🚫 **Timed No-Help**: {issuer.mention} restricted {member.mention} until {unnohelp_time_string} | {self.bot.escape_text(member)}"
+        msg = f"🚫 **Timed No-Help**: {issuer.mention} restricted {member.mention} for {delta}, until {unnohelp_time_string} | {self.bot.escape_text(member)}"
         if reason != "":
             msg += "\n✏️ __Reason__: " + reason
         else:
