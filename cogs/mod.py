@@ -648,6 +648,19 @@ class Mod(DatabaseCog):
         self.bot.temp_guilds[code] = times
         await ctx.send(f"Approved an invite to {invite.guild}({code}) for posting {times} times")
         await self.bot.channels['mod-logs'].send(f"⭕ **Approved**: {ctx.author.mention} approved server {invite.guild}({code}) to be posted {times} times")
+                       
+    @is_staff("Helper")
+    @commands.guild_only()
+    @commands.command()
+    async def givestreamer(self, ctx, members: commands.Greedy[SafeMember]):
+        if len(members) < 1:
+            await ctx.send("Mention at least one user")
+            return
+        for member in members:
+            await member.add_roles(self.bot.roles['Small Help'])
+        await ctx.send(f"{', '.join([x.mention for x in members])} can access the small help channel.")
+        msg = f"⭕️ **Small help access granted**: {ctx.author.mention} granted access to small help channel to {', '.join([f'{x.mention} | {x}'for x in members])}"
+        await self.bot.channels['mod-logs'].send(msg)
 
 
 def setup(bot):
