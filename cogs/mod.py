@@ -653,13 +653,29 @@ class Mod(DatabaseCog):
     @commands.guild_only()
     @commands.command()
     async def givestreamer(self, ctx, members: commands.Greedy[SafeMember]):
+        """Grants accesss to streaming. Staff and Helpers only."""
         if len(members) < 1:
             await ctx.send("Mention at least one user")
             return
         for member in members:
-            await member.add_roles(self.bot.roles['Small Help'])
-        await ctx.send(f"{', '.join([x.mention for x in members])} can access the small help channel.")
-        msg = f"⭕️ **Small help access granted**: {ctx.author.mention} granted access to small help channel to {', '.join([f'{x.mention} | {x}'for x in members])}"
+            await member.add_roles(self.bot.roles['streamer(temp)'])
+        await ctx.send(f"{', '.join([x.mention for x in members])} can now stream.")
+        msg = f"⭕️ **Streaming access granted**: {ctx.author.mention} granted streaming permissions to {', '.join([f'{x.mention} | {x}'for x in members])}"
+        await self.bot.channels['mod-logs'].send(msg)
+                       
+                       
+    @is_staff("Helper")
+    @commands.guild_only()
+    @commands.command()
+    async def takestreamer(self, ctx, members: commands.Greedy[SafeMember]):
+        """Remove access to streaming. Staff and Helpers only."""
+        if len(members) < 1:
+            await ctx.send("Mention at least one user")
+            return
+        for member in members:
+            await member.remove_roles(self.bot.roles['streamer(temp)'])
+        await ctx.send(f"{', '.join([x.mention for x in members])} can no longer stream.")
+        msg = f"⭕️ **Streaming access revoked**: {ctx.author.mention} revoked streaming permissions from {', '.join([f'{x.mention} | {x}'for x in members])}"
         await self.bot.channels['mod-logs'].send(msg)
 
 
